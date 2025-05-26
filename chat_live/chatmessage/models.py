@@ -8,3 +8,5 @@ class ChatMessage(models.Model):#creation d'une class "chatmessage" qui herite d
 	content = models.TextField()#definit un champ pour des textes longs
 	timestamp = models.DateTimeField(auto_now_add=True)#champ pour stocker date et heure au format DATETIME, ajoute automatiquement date et heure actuelle
 
+def __str__(self):
+	return f"{self.sender} → {self.recipient}: {self.content[:20]}"#modifie l'affichage du texte dans l'interface django
