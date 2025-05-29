@@ -1,9 +1,19 @@
 import json
 from channels.generic.websocket import AsyncWebsocketConsumer
 
+
+#la classe doit hérité d'un des consumers de django channels:
+#-> AsyncWebsocketConsumer = gère les événements des websocket
+#		- async def : permet d'attendre des choses sans bloquer le programme
+#-> WebsocketConsumer = version synchrone des websocket (utilise def au lieu de async def)
+#-> AsyncConsumer / SyncConsumer
+#la classe doit implémenter certaines méthodes spécifiques:
+#- connect(self) : quand un client se connecte (puis self.accept() pour autoriser la connection)
+#- receive(self, text_data) : quand un message est reçu
+#- disconnect(self, close_code): quand la connection se ferme
 class ChatConsumer(AsyncWebsocketConsumer):
-    async def connect(self):
-        self.room_name = self.scope["url_route"]["kwargs"]["room_name"]
+    async def connect(self):#self représente l'instance de cette classe (= this)
+        self.room_name = self.scope["url_route"]["kwargs"]["room_name"]#self.scope donne accès aux infos de l'utilisateur
         self.room_group_name = f"chat_{self.room_name}"
 
         # Join room group
