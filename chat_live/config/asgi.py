@@ -16,6 +16,8 @@ import chatmessage.routing#import routing.py où on a définit les URLs des webs
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')#définit la variable d'environnement
 
+print("==> asgi.py module loaded")
+
 #application = get_asgi_application()
 #création d'une variable "application", reconnue et cherchée par le serveur (Daphne, Uvicorn...) pour gérer les connexions
 #ProtocoleTypeRouter est un objet fournis pas channels, qui détecte le type de connexion (HTTP ou websocket) pour la rediriger
