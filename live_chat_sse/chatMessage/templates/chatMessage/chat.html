@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Envoyer un message</title>
+</head>
+<body>
+    <h2>Envoyer un message</h2>
+    <label for="username">Nom d'utilisateur :</label>
+    <input type="text" id="username" placeholder="ex: admin"><br><br>
+
+    <label for="content">Message :</label>
+    <input type="text" id="content" placeholder="Tape ton message ici"><br><br>
+
+    <button onclick="sendMessage()">Envoyer</button>
+
+    <p id="response"></p>
+
+    <script>
+        function sendMessage() {
+            const username = document.getElementById("username").value;
+            const content = document.getElementById("content").value;
+
+            fetch("/chat/send/", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({ username: username, content: content })
+            })
+            .then(response => response.json())
+			.then(data => {
+				if (data.status === "success") {
+					document.getElementById("response").textContent = "Message envoyé !";
+					const log = document.createElement("p");
+					log.textContent = document.getElementById("content").value;
+					document.body.appendChild(log);
+					document.getElementById("content").value = "";
+				} else {
+					document.getElementById("response").textContent = "Erreur : " + data.message;
+				}
+			})
+            .catch(error => {
+                document.getElementById("response").textContent = "Erreur réseau : " + error;
+            });
+        }
+    </script>
+</body>
+</html>
