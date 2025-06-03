@@ -5,20 +5,22 @@
     <title>Envoyer un message</title>
 </head>
 <body>
-    <h2>Envoyer un message</h2>
-    <label for="username">Nom d'utilisateur :</label>
-    <input type="text" id="username" placeholder="ex: admin"><br><br>
+	{% if user.is_authenticated %}
+    	<p>Connecté en tant que : {{ user.username }} | <a href="/accounts/logout/">Se déconnecter</a></p>
+	{% else %}
+    	<p><a href="/accounts/login/">Connexion</a></p>
+	{% endif %}
 
+    <h2>Envoyer un message</h2>
     <label for="content">Message :</label>
     <input type="text" id="content" placeholder="Tape ton message ici"><br><br>
 
-    <button onclick="sendMessage()">Envoyer</button>
+	<button id="chat-send-btn">Envoyer</button>
 
     <p id="response"></p>
 
     <script>
         function sendMessage() {
-            const username = document.getElementById("username").value;
             const content = document.getElementById("content").value;
 
             fetch("/chat/send/", {
@@ -26,15 +28,12 @@
                 headers: {
                     "Content-Type": "application/json"
                 },
-                body: JSON.stringify({ username: username, content: content })
+                body: JSON.stringify({ content: content })
             })
             .then(response => response.json())
 			.then(data => {
 				if (data.status === "success") {
 					document.getElementById("response").textContent = "Message envoyé !";
-					const log = document.createElement("p");
-					log.textContent = document.getElementById("content").value;
-					document.body.appendChild(log);
 					document.getElementById("content").value = "";
 				} else {
 					document.getElementById("response").textContent = "Erreur : " + data.message;
@@ -44,6 +43,21 @@
                 document.getElementById("response").textContent = "Erreur réseau : " + error;
             });
         }
+	// Quand on appuie sur Entrée dans le champ message, on envoie le message
+	document.getElementById("content").addEventListener("keydown", function(event) {
+		if (event.key === "Enter") {sendMessage();}
+	});
+	document.getElementById("chat-send-btn").addEventListener("click", sendMessage);
+
+	const eventSource = new EventSource("/chat/stream/");
+
+	eventSource.onmessage = function(e) {
+	    const data = JSON.parse(e.data);
+	    const log = document.createElement("p");
+	    log.textContent = `[${data.timestamp}] ${data.sender} : ${data.content}`;
+	    document.body.appendChild(log);
+	};
+
     </script>
 </body>
 </html>

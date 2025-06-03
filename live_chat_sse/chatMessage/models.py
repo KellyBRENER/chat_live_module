@@ -17,6 +17,7 @@ class	Message(models.Model):
 	#related_name sert à nommer la colonne "messages envoyés" dans User par 'sent_message'
 	#dans la table user on pourra ainsi récupéré tous les messages envoyés par ce user
 	sender = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sent_messages')
+	recipient = models.ForeignKey(User, on_delete=models.CASCADE, related_name="received_messages")
 	content = models.TextField()#texte du message sans taille limite
 	timestamp = models.DateTimeField(default=timezone.now)#récupère la date et l'heure actuelle
 
