@@ -1,63 +1,150 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>Envoyer un message</title>
+  <meta charset="UTF-8">
+  <title>Chat Bulle</title>
+  <style>
+    .chat-bubble {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      width: 300px;
+      max-height: 400px;
+      background: white;
+      border: 1px solid #ccc;
+      border-radius: 12px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+      overflow: hidden;
+      display: none;
+      flex-direction: column;
+      z-index: 1000;
+    }
+
+    .chat-header {
+      background: #007bff;
+      color: white;
+      padding: 10px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    .chat-body {
+      padding: 10px;
+      overflow-y: auto;
+      flex: 1;
+      max-height: 250px;
+    }
+
+    .chat-input {
+      display: flex;
+      padding: 10px;
+      border-top: 1px solid #ccc;
+    }
+
+    .chat-input input {
+      flex: 1;
+      padding: 8px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+
+    .chat-input button {
+      margin-left: 8px;
+      padding: 8px 12px;
+      border: none;
+      background: #007bff;
+      color: white;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    .open-chat-button {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: #007bff;
+      color: white;
+      border: none;
+      border-radius: 50%;
+      width: 60px;
+      height: 60px;
+      font-size: 24px;
+      cursor: pointer;
+      z-index: 999;
+    }
+
+    .chat-message {
+      margin-bottom: 10px;
+      padding: 6px 10px;
+      background: #f1f1f1;
+      border-radius: 8px;
+    }
+  </style>
 </head>
 <body>
-	{% if user.is_authenticated %}
-    	<p>Connecté en tant que : {{ user.username }} | <a href="/accounts/logout/">Se déconnecter</a></p>
-	{% else %}
-    	<p><a href="/accounts/login/">Connexion</a></p>
-	{% endif %}
 
-    <h2>Envoyer un message</h2>
-    <label for="content">Message :</label>
-    <input type="text" id="content" placeholder="Tape ton message ici"><br><br>
+<button class="open-chat-button" onclick="toggleChat()">💬</button>
 
-	<button id="chat-send-btn">Envoyer</button>
+<div class="chat-bubble" id="chatBubble">
+  <div class="chat-header" onclick="toggleChat()">Chat</div>
+  <div class="chat-body" id="chatLog"></div>
+  <div class="chat-input">
+    <input type="text" id="usernameInput" placeholder="Nom d'utilisateur">
+  </div>
+  <div class="chat-input">
+    <input type="text" id="messageInput" placeholder="Écris un message">
+    <button onclick="sendMessage()">Envoyer</button>
+  </div>
+</div>
 
-    <p id="response"></p>
+<script>
+  const chatBubble = document.getElementById("chatBubble");
+  const chatLog = document.getElementById("chatLog");
 
-    <script>
-        function sendMessage() {
-            const content = document.getElementById("content").value;
+  function toggleChat() {
+    chatBubble.style.display = (chatBubble.style.display === "none" || chatBubble.style.display === "") ? "flex" : "none";
+  }
 
-            fetch("/chat/send/", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({ content: content })
-            })
-            .then(response => response.json())
-			.then(data => {
-				if (data.status === "success") {
-					document.getElementById("response").textContent = "Message envoyé !";
-					document.getElementById("content").value = "";
-				} else {
-					document.getElementById("response").textContent = "Erreur : " + data.message;
-				}
-			})
-            .catch(error => {
-                document.getElementById("response").textContent = "Erreur réseau : " + error;
-            });
-        }
-	// Quand on appuie sur Entrée dans le champ message, on envoie le message
-	document.getElementById("content").addEventListener("keydown", function(event) {
-		if (event.key === "Enter") {sendMessage();}
-	});
-	document.getElementById("chat-send-btn").addEventListener("click", sendMessage);
+  function sendMessage() {
+    const username = document.getElementById("usernameInput").value;
+    const content = document.getElementById("messageInput").value;
 
-	const eventSource = new EventSource("/chat/stream/");
+    if (!username || !content) {
+      alert("Nom d'utilisateur et message requis !");
+      return;
+    }
 
-	eventSource.onmessage = function(e) {
-	    const data = JSON.parse(e.data);
-	    const log = document.createElement("p");
-	    log.textContent = `[${data.timestamp}] ${data.sender} : ${data.content}`;
-	    document.body.appendChild(log);
-	};
+    fetch("/chat/send/", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ as: username, content: content })
+    })
+    .then(response => response.json())
+    .then(data => {
+      if (data.status === "success") {
+        document.getElementById("messageInput").value = "";
+      }
+    });
+  }
 
-    </script>
+  const eventSource = new EventSource("/chat/stream/");
+  eventSource.onmessage = function(event) {
+    const data = JSON.parse(event.data);
+    const msg = document.createElement("div");
+    msg.classList.add("chat-message");
+    msg.textContent = `[${data.timestamp}] ${data.sender} : ${data.content}`;
+    chatLog.appendChild(msg);
+    chatLog.scrollTop = chatLog.scrollHeight;
+  };
+
+  document.getElementById("messageInput").addEventListener("keydown", function(event) {
+    if (event.key === "Enter") {
+      sendMessage();
+    }
+  });
+</script>
+
 </body>
 </html>
