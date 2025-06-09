@@ -1,21 +1,16 @@
-from django.shortcuts import render
-from django.http import JsonResponse
+from django.shortcuts import render, get_object_or_404
+from django.http import JsonResponse, StreamingHttpResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.models import User
-from .models import Message
+from .models import Message, ChatGroup
 import json
 import time
-from django.http import StreamingHttpResponse
 from django.views.decorators.http import condition
 from django.contrib.auth.decorators import login_required
 from django.utils.decorators import method_decorator
-
+from django.utils.timezone import now, timedelta
 
 # Create your views here.
-
-# Buffer global (simplifié pour test)
-latest_messages = []
-
 
 #à remettre après les tests
 @csrf_exempt  # désactive la sécu par défaut de django qui protège des falsifications de requêtes
@@ -24,27 +19,19 @@ def send_message(request):
     if request.method == "POST":
         try:
             data = json.loads(request.body)
-            username = data.get("as")
+            username = data.get("username")
             sender = User.objects.get_or_create(username=username)[0]
             content = data.get("content")
-			 # essayer de récupérer recipient si donné
-            recipient_username = data.get("recipient")
-            if recipient_username:
-                recipient = User.objects.get_or_create(username=recipient_username)[0]
+            group_id = data.get("group_id")
+            if group_id:
+                group = ChatGroup.objects.get(id=group_id)
             else:
-                recipient = None  # message public
-            message = Message.objects.create(sender=sender, recipient=recipient, content=content)
-            # Ajouter au buffer SSE
-            latest_messages.append({
-                "sender": sender.username,
-                "recipient": recipient.username if recipient else "Tous",
-                "content": content,
-                "timestamp": message.timestamp.strftime("%Y-%m-%d %H:%M:%S")
-                })
+                group = ChatGroup.objects.get(name="general")  # message public
+            message = Message.objects.create(sender=sender, group=group, content=content)
             return JsonResponse({
                 "status": "success",
                 "sender": sender.username,
-                "recipient": recipient.username if recipient else None,
+                "group": group.name,
                 "content": content,
                 "timestamp": message.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
             })
@@ -59,12 +46,25 @@ def chat_page(request):
 
 # @login_required
 def sse_view(request):
+    group_id = request.GET.get("group")
+    if not group_id:
+        return StreamingHttpResponse("Missing group ID", status=400)
+    group = get_object_or_404(ChatGroup, id=group_id)
     def event_stream():
-        last_index = 0
+        last_message_id = 0
         while True:
-            if len(latest_messages) > last_index:
-                new = latest_messages[last_index]
-                last_index += 1
-                yield f"data: {json.dumps(new)}\n\n"
+            new_messages = Message.objects.filter(
+                group=group,
+                id__gt=last_message_id
+                ).order_by("timestamp")
+
+            for msg in new_messages:
+                msg_data = {
+                    "sender": msg.sender.username,
+                    "content": msg.content,
+                    "timestamp": msg.timestamp.strftime("%Y-%m-%d %H:%M:%S")
+                    }
+                last_message_id = msg.id
+                yield f"data: {json.dumps(msg_data)}\n\n"
             time.sleep(1)
     return StreamingHttpResponse(event_stream(), content_type='text/event-stream')
