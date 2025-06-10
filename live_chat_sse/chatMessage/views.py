@@ -22,11 +22,8 @@ def send_message(request):
             username = data.get("username")
             sender = User.objects.get_or_create(username=username)[0]
             content = data.get("content")
-            group_id = data.get("group_id")
-            if group_id:
-                group = ChatGroup.objects.get(id=group_id)
-            else:
-                group = ChatGroup.objects.get(name="general")  # message public
+            group_name = data.get("group_name")
+            group, _ = ChatGroup.objects.get_or_create(name=group_name)
             message = Message.objects.create(sender=sender, group=group, content=content)
             return JsonResponse({
                 "status": "success",
@@ -46,10 +43,10 @@ def chat_page(request):
 
 # @login_required
 def sse_view(request):
-    group_id = request.GET.get("group")
-    if not group_id:
+    group_name = request.GET.get("group", "general")
+    if not group_name:
         return StreamingHttpResponse("Missing group ID", status=400)
-    group = get_object_or_404(ChatGroup, id=group_id)
+    group = get_object_or_404(ChatGroup, name=group_name)
     def event_stream():
         last_message_id = 0
         while True:

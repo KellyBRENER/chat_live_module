@@ -90,6 +90,7 @@
   <div class="chat-body" id="chatLog"></div>
   <div class="chat-input">
     <input type="text" id="usernameInput" placeholder="Nom d'utilisateur">
+    <input type="hidden" id="groupNameInput" value="general">
   </div>
   <div class="chat-input">
     <input type="text" id="messageInput" placeholder="Écris un message">
@@ -100,26 +101,27 @@
 <script>
   const chatBubble = document.getElementById("chatBubble");
   const chatLog = document.getElementById("chatLog");
+  const groupName = document.getElementById("groupNameInput").value;
 
   function toggleChat() {
-    chatBubble.style.display = (chatBubble.style.display === "none" || chatBubble.style.display === "") ? "flex" : "none";
-  }
+	  chatBubble.style.display = (chatBubble.style.display === "none" || chatBubble.style.display === "") ? "flex" : "none";
+	}
 
-  function sendMessage() {
-    const username = document.getElementById("usernameInput").value;
-    const content = document.getElementById("messageInput").value;
+	function sendMessage() {
+		const username = document.getElementById("usernameInput").value;
+		const content = document.getElementById("messageInput").value;
 
-    if (!username || !content) {
-      alert("Nom d'utilisateur et message requis !");
-      return;
-    }
+		if (!username || !content) {
+			alert("Nom d'utilisateur et message requis !");
+			return;
+		}
 
     fetch("/chat/send/", {
       method: "POST",
       headers: {
         "Content-Type": "application/json"
       },
-      body: JSON.stringify({ as: username, content: content })
+      body: JSON.stringify({ username: username, content: content, group_name: groupName })
     })
     .then(response => response.json())
     .then(data => {
@@ -129,7 +131,8 @@
     });
   }
 
-  const eventSource = new EventSource("/chat/stream/");
+  const eventSource = new EventSource(`/chat/stream/?group=${groupName}`);
+
   eventSource.onmessage = function(event) {
     const data = JSON.parse(event.data);
     const msg = document.createElement("div");
