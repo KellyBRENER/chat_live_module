@@ -5,7 +5,7 @@ PIP = pip
 ENV = env
 
 run:
-	$(PYTHON) manage.py runserver
+	PYTHONPATH=. daphne live_chat_sse.asgi:application
 
 migrate:
 #crée le code python qui décrit comment créer la table en SQL
