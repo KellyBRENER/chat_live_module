@@ -7,6 +7,10 @@ ENV = env
 run:
 	PYTHONPATH=. daphne live_chat_sse.asgi:application
 
+delete:
+	rm db.sqlite3
+	rm chatMessage/migrations/0*.py
+	
 migrate:
 #crée le code python qui décrit comment créer la table en SQL
 	$(PYTHON) manage.py makemigrations

@@ -1,29 +1,21 @@
 import os
-import django # <--- Add this import
+import django
 
-from channels.auth import AuthMiddlewareStack
-from channels.routing import ProtocolTypeRouter, URLRouter
-from channels.security.websocket import AllowedHostsOriginValidator
+from channels.routing import ProtocolTypeRouter # Plus besoin de URLRouter, AuthMiddlewareStack, AllowedHostsOriginValidator
 from django.core.asgi import get_asgi_application
 
-# Set the Django settings module environment variable FIRST
+# Définir la variable d'environnement du module de paramètres Django EN PREMIER
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'live_chat_sse.settings')
 
-# Initialize Django ASGI application early to ensure the AppRegistry
-# is populated before importing code that may import ORM models.
-django_asgi_app = get_asgi_application() # This calls django.setup() internally
+# Initialiser l'application ASGI de Django tôt pour s'assurer que l'AppRegistry
+# est peuplé avant d'importer du code qui pourrait importer des modèles ORM.
+django_asgi_app = get_asgi_application() # Ceci appelle django.setup() en interne
 
-# Now you can import your application-specific routing and consumers
-# as Django's environment is fully set up.
-import chatMessage.routing # <--- Move this import AFTER get_asgi_application()
+# Plus besoin d'importer chatMessage.routing ici si vous supprimez les consommateurs WebSocket
+# (car routing.py est pour les WS Consumers)
 
 application = ProtocolTypeRouter({
-    "http": django_asgi_app, # Use the initialized ASGI application for HTTP
-    "websocket": AllowedHostsOriginValidator(
-        AuthMiddlewareStack(
-            URLRouter(
-                chatMessage.routing.websocket_urlpatterns
-            )
-        )
-    ),
+    # Django's ASGI application to handle traditional HTTP requests and SSE
+    "http": django_asgi_app,
+    # La partie "websocket" est supprimée
 })

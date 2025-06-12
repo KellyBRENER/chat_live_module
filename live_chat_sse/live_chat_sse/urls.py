@@ -21,6 +21,4 @@ from django.contrib.auth import views as auth_views#pour créer un fenêtre d'au
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('chat/', include('chatMessage.urls')),
-	path('accounts/login/', auth_views.LoginView.as_view(), name='login'),#A SUPPRIMER
-    path('accounts/logout/', auth_views.LogoutView.as_view(), name='logout'),#A SUPPRIMER
 ]
