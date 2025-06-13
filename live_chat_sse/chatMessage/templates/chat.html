@@ -144,7 +144,55 @@
         .chat-input button:hover {
             background-color: #218838;
         }
+        /* Nouveau conteneur pour les boutons de chat */
+        .chat-buttons-container {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            display: flex; /* Utilise flexbox */
+            flex-direction: row-reverse; /* Arrange les éléments de droite à gauche */
+            gap: 10px; /* Espace entre les boutons */
+            z-index: 1000;
+        }
 
+        /* Styles génériques des boutons de chat (peut remplacer .open-chat-button) */
+        .chat-toggle-button {
+            background-color: #007bff; /* Couleur par défaut */
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            font-size: 30px;
+            cursor: pointer;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            /* Animation simple pour le hover */
+            transition: background-color 0.2s ease;
+        }
+
+        .chat-toggle-button:hover {
+            opacity: 0.9;
+        }
+
+        /* Styles spécifiques pour les boutons de chats privés (ajustez les couleurs) */
+        .chat-toggle-button.private {
+            background-color: #6c757d; /* Gris pour les chats privés */
+        }
+        .chat-toggle-button.private.color1 { background-color: #28a745; } /* Vert */
+        .chat-toggle-button.private.color2 { background-color: #ffc107; } /* Jaune */
+        .chat-toggle-button.private.color3 { background-color: #dc3545; } /* Rouge */
+        .chat-toggle-button.private.color4 { background-color: #17a2b8; } /* Cyan */
+        .chat-toggle-button.private.color5 { background-color: #6610f2; } /* Violet */
+
+
+        /* Ajuster la position de la bulle de chat pour ne pas chevaucher le conteneur de boutons */
+        .chat-bubble {
+            bottom: 90px; /* Laisse de la place pour le conteneur de boutons */
+            /* ... le reste de vos styles .chat-bubble ... */
+        }
         /* Styles spécifiques pour les chats privés */
         .private-chat {
             right: 390px; /* Décale les chats privés à gauche pour ne pas chevaucher le chat général */
@@ -168,8 +216,8 @@
 </head>
 <body>
 
-    <button class="open-chat-button" onclick="toggleChat('general', true)">💬</button>
-
+    <div id="chatButtonsContainer" class="chat-buttons-container">
+        </div>
     <script>
         const chatBubbles = {}; // Stocke les références aux éléments de bulle par groupName
         const eventSources = {}; // Stocke les objets EventSource par groupName
@@ -265,100 +313,169 @@
                 console.error("Erreur réseau lors du chargement de l'historique:", error);
             }
         }
+// NOUVELLE variable pour les couleurs des boutons privés
+const privateChatButtonColors = [
+    'color1', 'color2', 'color3', 'color4', 'color5' // Ajoutez plus si vous prévoyez beaucoup de chats privés
+];
+const assignedPrivateChatColors = {}; // Pour suivre les couleurs déjà attribuées
 
-        // Fonction pour créer une bulle de chat dynamique
-        async function createChatBubble(groupName, isPrivate = false) {
-            // Si la bulle existe déjà, l'afficher et ne pas la recréer
-            if (chatBubbles[groupName]) {
-                toggleChat(groupName, true); // Force l'affichage
-                // S'assurer que le nom d'utilisateur est copié si c'est un nouveau chat privé
-                const usernameInputGeneral = document.getElementById('usernameInput-general');
-                const usernameInputCurrent = document.getElementById(`usernameInput-${groupName}`);
-                if (usernameInputGeneral && usernameInputCurrent && !usernameInputCurrent.value) {
-                    usernameInputCurrent.value = usernameInputGeneral.value;
-                }
-                const chatLog = document.getElementById(`chatLog-${groupName}`);
-                if (chatLog) {
-                    chatLog.scrollTop = chatLog.scrollHeight; // Scroll vers le bas
-                }
-                return;
-            }
+// --- Nouvelle fonction pour créer et gérer les boutons de chat ---
+function createChatToggleButton(groupName, isPrivate = false) {
+    const buttonsContainer = document.getElementById('chatButtonsContainer');
+    let button = document.getElementById(`chatToggleButton-${groupName}`);
 
-            const chatContainer = document.createElement('div');
-            chatContainer.classList.add('chat-bubble');
-            chatContainer.id = `chatBubble-${groupName}`;
+    // Si le bouton existe déjà, ne rien faire (il est déjà là)
+    if (button) {
+        return button;
+    }
 
-            if (isPrivate) {
-                chatContainer.classList.add('private-chat');
-            }
+    button = document.createElement('button');
+    button.classList.add('chat-toggle-button');
+    button.id = `chatToggleButton-${groupName}`;
+    button.textContent = '💬'; // Icône par défaut
 
-            // Générer le contenu HTML de la bulle en utilisant les IDs dynamiques
-            chatContainer.innerHTML = `
-                <div class="chat-header" onclick="toggleChat('${groupName}')">
-                    ${isPrivate ? `Chat Privé (${groupName.split('_').slice(1).join(' - ')})` : 'Chat Général'}
-                </div>
-                <div class="chat-body" id="chatLog-${groupName}">
-                    </div>
-                <div class="chat-input">
-                    <input type="text" id="usernameInput-${groupName}" placeholder="Votre nom">
-                    <input type="hidden" id="groupNameInput-${groupName}" value="${groupName}">
-                </div>
-                <div class="chat-input">
-                    <input type="text" id="messageInput-${groupName}" placeholder="Écris un message">
-                    <button onclick="sendMessage('${groupName}')">Envoyer</button>
-                </div>
-            `;
-
-            document.body.appendChild(chatContainer); // Ajouter la bulle au corps du document
-            chatBubbles[groupName] = chatContainer; // Stocker la référence
-
-            toggleChat(groupName, true); // Afficher la nouvelle bulle
-
-            // Copier le nom d'utilisateur si déjà renseigné dans le chat général
-            const usernameInputGeneral = document.getElementById('usernameInput-general');
-            const usernameInputCurrent = document.getElementById(`usernameInput-${groupName}`);
-            if (usernameInputGeneral && usernameInputCurrent) {
-                usernameInputCurrent.value = usernameInputGeneral.value;
-            }
-
-            // NOUVEAU: Charger l'historique des messages pour cette bulle
-            await loadMessageHistory(groupName);
-
-            // Initialiser la connexion SSE pour ce nouveau groupe après avoir chargé l'historique
-            initEventSource(groupName);
-
-            // NOUVEAU: Ajouter l'écouteur de scroll pour charger plus d'historique
-            const chatLog = document.getElementById(`chatLog-${groupName}`);
-            if (chatLog) {
-                chatLog.addEventListener('scroll', function() {
-                    // Si l'utilisateur a scrollé tout en haut
-                    if (chatLog.scrollTop === 0) {
-                        loadMessageHistory(groupName, true); // Charger plus d'historique et l'ajouter en haut
-                    }
-                });
-            }
+    if (isPrivate) {
+        button.classList.add('private');
+        // Trouver une couleur disponible ou en réutiliser une si le chat a déjà été ouvert
+        let colorClass = assignedPrivateChatColors[groupName];
+        if (!colorClass) {
+            // Simple assignation de couleur cyclique
+            const colorIndex = Object.keys(assignedPrivateChatColors).length % privateChatButtonColors.length;
+            colorClass = privateChatButtonColors[colorIndex];
+            assignedPrivateChatColors[groupName] = colorClass;
         }
+        button.classList.add(colorClass);
+
+        // Mettre les initiales de l'interlocuteur dans l'icône du bouton
+        const participants = groupName.split('_').slice(1); // Ex: 'private_Alice_Bob' -> ['Alice', 'Bob']
+        if (participants.length >= 2) {
+            const otherUser = participants[0]; // Ou mettez une logique pour identifier l'autre utilisateur
+            button.textContent = otherUser.charAt(0).toUpperCase(); // Première lettre de l'autre utilisateur
+        } else {
+             button.textContent = '🔒'; // Icône générique pour chat privé si noms non disponibles
+        }
+
+    } else {
+        // Chat général, pas de changement pour l'icône par défaut
+    }
+
+    // Gérer l'action de clic
+    button.onclick = () => {
+        toggleChat(groupName);
+    };
+
+    // Ajouter le bouton au conteneur (il sera ajouté au début grâce à flex-direction: row-reverse)
+    buttonsContainer.prepend(button); // Ajoute au début du conteneur pour alignement de droite à gauche
+
+    return button;
+}
+        // Fonction pour créer une bulle de chat dynamique
+// --- Mise à jour de la fonction createChatBubble ---
+async function createChatBubble(groupName, isPrivate = false) {
+    // Si la bulle existe déjà, l'afficher et ne pas la recréer
+    if (chatBubbles[groupName]) {
+        toggleChat(groupName, true); // Force l'affichage
+        // S'assurer que le nom d'utilisateur est copié si c'est un nouveau chat privé
+        const usernameInputGeneral = document.getElementById('usernameInput-general');
+        const usernameInputCurrent = document.getElementById(`usernameInput-${groupName}`);
+        if (usernameInputGeneral && usernameInputCurrent && !usernameInputCurrent.value) {
+            usernameInputCurrent.value = usernameInputGeneral.value;
+        }
+        const chatLog = document.getElementById(`chatLog-${groupName}`);
+        if (chatLog) {
+            chatLog.scrollTop = chatLog.scrollHeight; // Scroll vers le bas
+        }
+        // Assurez-vous que le bouton est créé/visible si la bulle existe déjà
+        createChatToggleButton(groupName, isPrivate);
+        return;
+    }
+
+    const chatContainer = document.createElement('div');
+    chatContainer.classList.add('chat-bubble');
+    chatContainer.id = `chatBubble-${groupName}`;
+
+    if (isPrivate) {
+        chatContainer.classList.add('private-chat');
+        // Calculer la position 'right' pour que les bulles privées s'empilent à gauche
+        // Chaque bulle privée aura un 'right' décalé par rapport à la précédente
+        const existingBubbles = document.querySelectorAll('.chat-bubble[style*="display: flex"]');
+        const offset = existingBubbles.length * 370; // 350px (largeur) + 20px (marge) ou plus
+        chatContainer.style.right = `${20 + offset}px`; // 20px de base + offset
+    }
+
+
+    // Générer le contenu HTML de la bulle en utilisant les IDs dynamiques
+    chatContainer.innerHTML = `
+        <div class="chat-header" onclick="toggleChat('${groupName}')">
+            ${isPrivate ? `Chat Privé (${groupName.split('_').slice(1).join(' - ')})` : 'Chat Général'}
+        </div>
+        <div class="chat-body" id="chatLog-${groupName}">
+        </div>
+        <div class="chat-input">
+            <input type="text" id="usernameInput-${groupName}" placeholder="Votre nom">
+            <input type="hidden" id="groupNameInput-${groupName}" value="${groupName}">
+        </div>
+        <div class="chat-input">
+            <input type="text" id="messageInput-${groupName}" placeholder="Écris un message">
+            <button onclick="sendMessage('${groupName}')">Envoyer</button>
+        </div>
+    `;
+
+    document.body.appendChild(chatContainer); // Ajouter la bulle au corps du document
+    chatBubbles[groupName] = chatContainer; // Stocker la référence
+
+    // Important: Créez le bouton correspondant à la bulle ici
+    createChatToggleButton(groupName, isPrivate);
+
+    toggleChat(groupName, true); // Force l'affichage de la nouvelle bulle
+
+    // Copier le nom d'utilisateur si déjà renseigné dans le chat général
+    const usernameInputGeneral = document.getElementById('usernameInput-general');
+    const usernameInputCurrent = document.getElementById(`usernameInput-${groupName}`);
+    if (usernameInputGeneral && usernameInputCurrent) {
+        usernameInputCurrent.value = usernameInputGeneral.value;
+    }
+
+    await loadMessageHistory(groupName); // Charger l'historique des messages pour cette bulle
+
+    initEventSource(groupName); // Initialiser la connexion SSE pour ce nouveau groupe
+
+    // Ajouter l'écouteur de scroll pour charger plus d'historique
+    const chatLog = document.getElementById(`chatLog-${groupName}`);
+    if (chatLog) {
+        chatLog.addEventListener('scroll', function() {
+            if (chatLog.scrollTop === 0) {
+                loadMessageHistory(groupName, true);
+            }
+        });
+    }
+}
 
         // Fonction pour afficher/masquer une bulle de chat
-        function toggleChat(groupName, forceDisplay = false) {
-            const bubble = document.getElementById(`chatBubble-${groupName}`);
-            if (bubble) {
-                if (forceDisplay) {
-                    bubble.style.display = 'flex';
-                } else {
-                    bubble.style.display = (bubble.style.display === 'none' || bubble.style.display === '') ? 'flex' : 'none';
-                }
-                // Si affiché, faire défiler vers le bas
-                if (bubble.style.display === 'flex') {
-                    const chatLog = document.getElementById(`chatLog-${groupName}`);
-                    if (chatLog) {
-                        chatLog.scrollTop = chatLog.scrollHeight;
-                    }
-                    // NOUVEAU: retirer le point rouge si la bulle est ouverte (futur)
-                    // removeNotificationDot(groupName);
-                }
-            }
-        }
+// --- Mise à jour de la fonction toggleChat ---
+	function toggleChat(groupName, forceDisplay = false) {
+	    const bubble = document.getElementById(`chatBubble-${groupName}`);
+	    if (bubble) {
+	        if (forceDisplay) {
+	            bubble.style.display = 'flex';
+	        } else {
+	            bubble.style.display = (bubble.style.display === 'none' || bubble.style.display === '') ? 'flex' : 'none';
+	        }
+
+        	// Si affiché, faire défiler vers le bas
+	        if (bubble.style.display === 'flex') {
+	            const chatLog = document.getElementById(`chatLog-${groupName}`);
+	            if (chatLog) {
+	                chatLog.scrollTop = chatLog.scrollHeight;
+	            }
+	            // Mettre à jour la position des autres bulles si celle-ci s'affiche/se masque
+	            updateChatBubblePositions();
+	        } else {
+	             // Si la bulle est masquée, ajuster la position des autres
+	             updateChatBubblePositions();
+	        }
+	    }
+	}
 
         // Fonction pour envoyer un message
         async function sendMessage(groupName) {
@@ -506,7 +623,18 @@
                 }
             }
         }
-
+// NOUVELLE FONCTION: Mettre à jour la position des bulles de chat privées
+	function updateChatBubblePositions() {
+	    const activeBubbles = document.querySelectorAll('.chat-bubble[style*="display: flex"]');
+	    let currentOffset = 0;
+	    activeBubbles.forEach(bubble => {
+	        // Ne déplace que les bulles privées
+	        if (bubble.classList.contains('private-chat')) {
+	            bubble.style.right = `${20 + currentOffset}px`;
+	            currentOffset += bubble.offsetWidth + 20; // Largeur de la bulle + gap
+	        }
+	    });
+	}
 
         // Exécute ce code lorsque le DOM est entièrement chargé
         document.addEventListener("DOMContentLoaded", () => {
