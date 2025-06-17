@@ -211,7 +211,38 @@
         .private-chat .chat-input button:hover {
             background-color: #138496;
         }
+		/****************A AJOUTER********************/
+		/* Styles pour le menu contextuel des actions utilisateur */
+	.user-actions-menu {
+	    position: absolute;
+	    background-color: #f9f9f9;
+	    border: 1px solid #ddd;
+	    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+	    z-index: 1001; /* Doit être au-dessus des bulles de chat */
+	    list-style: none; /* Supprime les puces de liste */
+	    padding: 5px 0;
+	    margin: 0;
+	    min-width: 150px;
+	    border-radius: 5px;
+	}
 
+	.user-actions-menu li {
+	    padding: 8px 12px;
+	    cursor: pointer;
+	    white-space: nowrap; /* Empêche le texte de se casser sur plusieurs lignes */
+	    font-size: 0.9em;
+	    color: #333;
+	}
+
+	.user-actions-menu li:hover {
+	    background-color: #e9e9e9;
+	}
+
+	/* Style pour l'option "Bloquer" spécifique */
+	.user-actions-menu li.block-action {
+	    color: #dc3545; /* Rouge pour l'action de blocage */
+	}
+/**************************A AJOUTER***********************/
     </style>
 </head>
 <body>
@@ -222,97 +253,331 @@
         const chatBubbles = {}; // Stocke les références aux éléments de bulle par groupName
         const eventSources = {}; // Stocke les objets EventSource par groupName
         const messageOffsets = {}; // NOUVEAU: Stocke l'offset pour l'historique de chaque groupe
-
+/**************************A AJOUTER***********************/
+		let blockedUsers = []; // NOUVEAU: Stocke les noms des utilisateurs bloqués
+		let userActionsMenu = null; // Référence au menu contextuel
+/**************************A AJOUTER***********************/
         // Helper pour créer un élément message HTML
-        function createMessageElement(messageData, groupName) {
-			const msg = document.createElement('div');
-			msg.classList.add('chat-message');
+		function createMessageElement(messageData, groupName) {
+    		const usernameInput = document.getElementById(`usernameInput-${groupName}`);
+    		const currentUsername = usernameInput ? usernameInput.value : '';
 
-			const usernameInput = document.getElementById(`usernameInput-${groupName}`);
-			const currentUsername = usernameInput ? usernameInput.value : '';
+    		const sender = messageData.sender__username || messageData.sender;
 
-			// Détermine si c'est son propre message
-    	if (messageData.sender === currentUsername || messageData.sender__username === currentUsername) { // Ajout de sender__username pour la compatibilité historique
-        	msg.classList.add('self');
-    	} else {
-    	    msg.classList.add('other');
-    	}
+    		// NOUVEAU: Si l'expéditeur est dans la liste des utilisateurs bloqués, ne pas afficher le message
+    		if (blockedUsers.includes(sender)) {
+        		return null; // Retourne null si le message doit être ignoré
+    		}
 
-    	const senderSpan = document.createElement('span');
-    	senderSpan.classList.add('message-sender');
-    	// UTILISE 'messageData.sender__username' QUI VIENT DE L'HISTORIQUE OU 'messageData.sender' DES NOUVEAUX MESSAGES
-    	senderSpan.textContent = messageData.sender__username || messageData.sender;
-    	// ... (Reste du code pour le nom d'utilisateur cliquable) ...
-    	// Rendre le nom cliquable pour initier un chat privé (sauf avec soi-même)
-    	const displayedSender = messageData.sender__username || messageData.sender;
-    	if (displayedSender && displayedSender !== currentUsername) {
-    	    senderSpan.style.cursor = 'pointer';
-    	    senderSpan.style.textDecoration = 'underline';
-    	    senderSpan.onclick = () => promptPrivateChat(displayedSender, messageData.sender_id || null);
-    	}
-    	msg.appendChild(senderSpan);
+    		const msg = document.createElement('div');
+    		msg.classList.add('chat-message');
 
-    	const contentText = document.createTextNode(messageData.content);
-    	msg.appendChild(contentText);
+    		// Détermine si c'est son propre message
+    		if (sender === currentUsername) {
+        		msg.classList.add('self');
+    		} else {
+        		msg.classList.add('other');
+    		}
 
-    	const timestampSpan = document.createElement('span');
-    	timestampSpan.classList.add('message-timestamp');
-    	timestampSpan.textContent = messageData.timestamp;
-    	msg.appendChild(timestampSpan);
+    		const senderSpan = document.createElement('span');
+    		senderSpan.classList.add('message-sender');
+    		senderSpan.textContent = sender;
 
-    	return msg;
-	}
+    	// NOUVEAU: Attacher un événement de clic pour afficher le menu d'actions
+    		if (sender) { // Rendre le nom cliquable s'il existe
+        		senderSpan.style.cursor = 'pointer';
+        		senderSpan.style.textDecoration = 'underline';
+        		senderSpan.onclick = (event) => {
+            // Empêcher l'événement de se propager pour ne pas fermer immédiatement le menu
+        		    event.stopPropagation();
+        		    showUserActionsMenu(event, sender, messageData.sender_id || null);
+        		};
+    		}
+    		msg.appendChild(senderSpan);
 
-        // NOUVELLE FONCTION: Charger l'historique des messages
-        async function loadMessageHistory(groupName, prepend = false) {
-            const chatLog = document.getElementById(`chatLog-${groupName}`);
-            if (!chatLog) {
-                console.error(`chatLog-${groupName} introuvable pour charger l'historique.`);
-                return;
+    		const contentText = document.createTextNode(messageData.content);
+    		msg.appendChild(contentText);
+
+    		const timestampSpan = document.createElement('span');
+    		timestampSpan.classList.add('message-timestamp');
+    		timestampSpan.textContent = messageData.timestamp;
+    		msg.appendChild(timestampSpan);
+
+    		return msg;
+		}
+		// Ferme le menu d'actions s'il est ouvert
+function closeUserActionsMenu() {
+    if (userActionsMenu) {
+        userActionsMenu.remove();
+        userActionsMenu = null;
+    }
+}
+
+// Ouvre le menu d'actions utilisateur
+function showUserActionsMenu(event, targetUsername, targetUserId) {
+    closeUserActionsMenu(); // Ferme tout menu existant
+
+    const currentUsernameInput =
+        document.getElementById('usernameInput-general') ||
+        document.querySelector('.chat-bubble input[id^="usernameInput-"]');
+    const currentUsername = currentUsernameInput ? currentUsernameInput.value.trim() : '';
+
+
+    userActionsMenu = document.createElement('ul');
+    userActionsMenu.classList.add('user-actions-menu');
+
+    // Option 1: Voir le profil
+    let listItemProfile = document.createElement('li');
+    listItemProfile.textContent = 'Voir le profil';
+    listItemProfile.onclick = () => {
+        alert(`Voir le profil de ${targetUsername} (pas implémenté)`);
+        closeUserActionsMenu();
+    };
+    userActionsMenu.appendChild(listItemProfile);
+
+    // Option 2: Démarrer un chat privé (si ce n'est pas soi-même)
+    if (targetUsername !== currentUsername) {
+        let listItemPrivateChat = document.createElement('li');
+        listItemPrivateChat.textContent = 'Démarrer un chat privé';
+        listItemPrivateChat.onclick = () => {
+            promptPrivateChat(targetUsername, targetUserId);
+            closeUserActionsMenu();
+        };
+        userActionsMenu.appendChild(listItemPrivateChat);
+
+        // Option 3: Bloquer/Débloquer cet utilisateur
+        let listItemBlock = document.createElement('li');
+        listItemBlock.classList.add('block-action');
+        const isCurrentlyBlocked = blockedUsers.includes(targetUsername);
+        listItemBlock.textContent = isCurrentlyBlocked ? 'Débloquer cet utilisateur' : 'Bloquer cet utilisateur';
+        listItemBlock.onclick = () => {
+            if (isCurrentlyBlocked) {
+                unblockUser(targetUsername);
+            } else {
+                blockUser(targetUsername);
             }
+            closeUserActionsMenu();
+        };
+        userActionsMenu.appendChild(listItemBlock);
+    }
 
-            const offset = messageOffsets[groupName] || 0;
-            const limit = 20; // Nombre de messages à charger à chaque fois
 
-            try {
-                const response = await fetch(`/chat/history/${groupName}/?offset=${offset}&limit=${limit}`);
-                const data = await response.json();
+    // Option 4: Inviter à jouer
+    let listItemInvite = document.createElement('li');
+    listItemInvite.textContent = 'Inviter à jouer';
+    listItemInvite.onclick = () => {
+        alert(`Inviter ${targetUsername} à jouer (pas implémenté)`);
+        closeUserActionsMenu();
+    };
+    userActionsMenu.appendChild(listItemInvite);
 
-                if (response.ok && data.status === "success") {
-                    if (data.messages.length > 0) {
-                        const fragment = document.createDocumentFragment();
-                        data.messages.forEach(msgData => {
-                            const msgElement = createMessageElement(msgData, groupName);
-                            if (prepend) {
-                                fragment.appendChild(msgElement);
-                            } else {
-                                chatLog.appendChild(msgElement);
-                            }
-                        });
+    // Positionnement du menu
+    userActionsMenu.style.top = `${event.clientY + 5}px`;
+    userActionsMenu.style.left = `${event.clientX + 5}px`;
 
-                        if (prepend) {
-                            // Si on ajoute en haut, il faut insérer au début et ajuster le scroll
-                            const oldScrollHeight = chatLog.scrollHeight;
-                            chatLog.insertBefore(fragment, chatLog.firstChild);
-                            const newScrollHeight = chatLog.scrollHeight;
-                            // Maintenir la position de défilement relative
-                            chatLog.scrollTop = newScrollHeight - oldScrollHeight;
-                        } else {
-                            chatLog.appendChild(fragment);
-                            chatLog.scrollTop = chatLog.scrollHeight; // Défiler vers le bas après chargement initial
-                        }
-                        messageOffsets[groupName] = offset + data.messages.length;
-                    } else if (!prepend) {
-                        // Si aucun message n'est chargé au début, c'est peut-être la première fois
-                        console.log(`Pas d'historique pour ${groupName} ou fin de l'historique.`);
-                    }
-                } else {
-                    console.error("Erreur de chargement historique:", data.message || "Unknown error");
-                }
-            } catch (error) {
-                console.error("Erreur réseau lors du chargement de l'historique:", error);
-            }
+    document.body.appendChild(userActionsMenu);
+
+    // Fermer le menu si on clique n'importe où ailleurs sur la page
+    document.addEventListener('click', closeUserActionsMenu, { once: true });
+}
+// NOUVEAU: Fonction pour bloquer un utilisateur
+async function blockUser(usernameToBlock) {
+    if (!confirm(`Êtes-vous sûr de vouloir bloquer ${usernameToBlock}?`)) {
+        return;
+    }
+    try {
+        const response = await fetch('/chat/block_user/', { // Endpoint à créer dans Django
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken'),
+            },
+            body: JSON.stringify({ target_username: usernameToBlock }),
+        });
+
+        const data = await response.json();
+        if (response.ok && data.status === 'success') {
+            alert(`${usernameToBlock} a été bloqué.`);
+            // Mettre à jour la liste des utilisateurs bloqués et rafraîchir l'affichage
+            await fetchBlockedUsers();
+            await refreshAllChatLogs();
+        } else {
+            console.error('Erreur lors du blocage:', data.message || 'Unknown error');
+            alert('Erreur lors du blocage: ' + (data.message || ''));
         }
+    } catch (error) {
+        console.error('Erreur réseau lors du blocage:', error);
+        alert('Impossible de bloquer l\'utilisateur. Erreur réseau.');
+    }
+}
+
+// NOUVEAU: Fonction pour débloquer un utilisateur
+async function unblockUser(usernameToUnblock) {
+    if (!confirm(`Êtes-vous sûr de vouloir débloquer ${usernameToUnblock}?`)) {
+        return;
+    }
+    try {
+        const response = await fetch('/chat/unblock_user/', { // Endpoint à créer dans Django
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken'),
+            },
+            body: JSON.stringify({ target_username: usernameToUnblock }),
+        });
+
+        const data = await response.json();
+        if (response.ok && data.status === 'success') {
+            alert(`${usernameToUnblock} a été débloqué.`);
+            // Mettre à jour la liste des utilisateurs bloqués et rafraîchir l'affichage
+            await fetchBlockedUsers();
+            await refreshAllChatLogs();
+        } else {
+            console.error('Erreur lors du déblocage:', data.message || 'Unknown error');
+            alert('Erreur lors du déblocage: ' + (data.message || ''));
+        }
+    } catch (error) {
+        console.error('Erreur réseau lors du déblocage:', error);
+        alert('Impossible de débloquer l\'utilisateur. Erreur réseau.');
+    }
+}
+
+
+// NOUVEAU: Fonction pour rafraîchir tous les journaux de chat visibles
+async function refreshAllChatLogs() {
+    console.log("Refreshing all chat logs...");
+    for (const groupName in chatBubbles) {
+        const chatLog = document.getElementById(`chatLog-${groupName}`);
+        if (chatLog) {
+            chatLog.innerHTML = ''; // Efface le contenu actuel
+            messageOffsets[groupName] = 0; // Réinitialise l'offset pour recharger depuis le début
+            await loadMessageHistory(groupName); // Recharge l'historique
+        }
+    }
+}
+
+// NOUVEAU: Fonction pour charger la liste des utilisateurs bloqués au démarrage
+async function fetchBlockedUsers() {
+    try {
+        const response = await fetch('/chat/get_blocked_users/', { // Endpoint à créer dans Django
+            method: 'GET',
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken'), // Nécessaire si GET est protégé par CSRF
+            },
+        });
+        const data = await response.json();
+        if (response.ok && data.status === 'success') {
+            blockedUsers = data.blocked_usernames;
+            console.log('Utilisateurs bloqués chargés:', blockedUsers);
+        } else {
+            console.error('Erreur lors du chargement des utilisateurs bloqués:', data.message || 'Unknown error');
+            blockedUsers = []; // S'assurer que la liste est vide en cas d'erreur
+        }
+    } catch (error) {
+        console.error('Erreur réseau lors du chargement des utilisateurs bloqués:', error);
+        blockedUsers = [];
+    }
+}
+// NOUVELLE FONCTION: Charger l'historique des messages
+async function loadMessageHistory(groupName, prepend = false) {
+    const chatLog = document.getElementById(`chatLog-${groupName}`);
+    if (!chatLog) {
+        console.error(
+            `chatLog-${groupName} introuvable pour charger l'historique.`
+        );
+        return;
+    }
+
+    const offset = messageOffsets[groupName] || 0;
+    const limit = 20; // Nombre de messages à charger à chaque fois
+
+    try {
+        const response = await fetch(
+            `/chat/history/${groupName}/?offset=${offset}&limit=${limit}`
+        );
+        const data = await response.json();
+
+        if (response.ok && data.status === 'success') {
+            if (data.messages.length > 0) {
+                const fragment = document.createDocumentFragment();
+                let messagesAdded = 0; // Compteur pour les messages réellement ajoutés
+
+                data.messages.forEach((msgData) => {
+                    const msgElement = createMessageElement(msgData, groupName);
+                    if (msgElement) { // NOUVEAU: N'ajouter que si l'élément n'est pas null
+                        if (prepend) {
+                            fragment.appendChild(msgElement);
+                        } else {
+                            chatLog.appendChild(msgElement);
+                        }
+                        messagesAdded++;
+                    }
+                });
+
+                if (prepend) {
+                    const oldScrollHeight = chatLog.scrollHeight;
+                    chatLog.insertBefore(fragment, chatLog.firstChild);
+                    const newScrollHeight = chatLog.scrollHeight;
+                    chatLog.scrollTop = newScrollHeight - oldScrollHeight;
+                } else {
+                    chatLog.appendChild(fragment);
+                    if (messagesAdded > 0) { // Défiler seulement si des messages ont été ajoutés
+                        chatLog.scrollTop = chatLog.scrollHeight;
+                    }
+                }
+                messageOffsets[groupName] = offset + data.messages.length; // L'offset doit toujours avancer par le nombre total de messages reçus, pas seulement affichés
+            } else if (!prepend) {
+                console.log(
+                    `Pas d'historique pour ${groupName} ou fin de l'historique.`
+                );
+            }
+        } else {
+            console.error(
+                'Erreur de chargement historique:',
+                data.message || 'Unknown error'
+            );
+        }
+    } catch (error) {
+        console.error("Erreur réseau lors du chargement de l'historique:", error);
+    }
+}
+
+// Fonction pour initialiser l'EventSource (SSE) pour un groupe
+function initEventSource(groupName) {
+    if (eventSources[groupName] && eventSources[groupName].readyState === EventSource.OPEN) {
+        return;
+    }
+
+    const chatLog = document.getElementById(`chatLog-${groupName}`);
+    if (!chatLog) {
+        console.error(`chatLog-${groupName} introuvable pour initEventSource.`);
+        return;
+    }
+
+    const source = new EventSource(`/chat/stream/${groupName}/`);
+    eventSources[groupName] = source;
+
+    source.onmessage = function(e) {
+        try {
+            // Les messages SSE sont envoyés directement par le backend en JSON pour le stream
+            const messageData = JSON.parse(e.data);
+            const msgElement = createMessageElement(messageData, groupName);
+            if (msgElement) { // NOUVEAU: N'ajouter que si l'élément n'est pas null
+                chatLog.appendChild(msgElement);
+                chatLog.scrollTop = chatLog.scrollHeight; // Défiler vers le bas
+            }
+        } catch (error) {
+            console.error("Erreur de parsing JSON ou de traitement du message SSE:", error, e.data);
+        }
+    };
+
+    source.onerror = function(err) {
+        console.error("EventSource failed:", err);
+                // Gérer les erreurs de connexion SSE (reconnexion, affichage message utilisateur, etc.)
+                // source.close(); // Peut-être fermer et tenter de reconnecter après un délai
+    };
+}
+
 // NOUVELLE variable pour les couleurs des boutons privés
 const privateChatButtonColors = [
     'color1', 'color2', 'color3', 'color4', 'color5' // Ajoutez plus si vous prévoyez beaucoup de chats privés
@@ -524,42 +789,6 @@ async function createChatBubble(groupName, isPrivate = false) {
             }
         }
 
-        // Fonction pour initialiser l'EventSource (SSE) pour un groupe
-        function initEventSource(groupName) {
-            if (eventSources[groupName] && eventSources[groupName].readyState === EventSource.OPEN) {
-                return;
-            }
-
-            const chatLog = document.getElementById(`chatLog-${groupName}`);
-            if (!chatLog) {
-                console.error(`chatLog-${groupName} introuvable pour initEventSource.`);
-                return;
-            }
-
-            const source = new EventSource(`/chat/stream/${groupName}/`);
-            eventSources[groupName] = source;
-
-            source.onmessage = function(e) {
-                try {
-                    // Les messages SSE sont envoyés directement par le backend en JSON pour le stream
-                    const messageData = JSON.parse(e.data);
-                    const msgElement = createMessageElement(messageData, groupName);
-                    chatLog.appendChild(msgElement);
-                    chatLog.scrollTop = chatLog.scrollHeight; // Défiler vers le bas
-                    // NOUVEAU: Ajouter le point rouge si la bulle n'est pas visible (futur)
-                    // addNotificationDot(groupName);
-                } catch (error) {
-                    console.error("Erreur de parsing JSON ou de traitement du message SSE:", error, e.data);
-                }
-            };
-
-            source.onerror = function(err) {
-                console.error("EventSource failed:", err);
-                // Gérer les erreurs de connexion SSE (reconnexion, affichage message utilisateur, etc.)
-                // source.close(); // Peut-être fermer et tenter de reconnecter après un délai
-            };
-        }
-
         // Fonction pour obtenir le token CSRF (inchangée)
         function getCookie(name) {
             let cookieValue = null;
@@ -636,23 +865,32 @@ async function createChatBubble(groupName, isPrivate = false) {
 	    });
 	}
 
-        // Exécute ce code lorsque le DOM est entièrement chargé
-        document.addEventListener("DOMContentLoaded", () => {
-            // Créer la bulle de chat générale au chargement de la page
-            createChatBubble('general', false);
+// Exécute ce code lorsque le DOM est entièrement chargé
+document.addEventListener('DOMContentLoaded', async () => { // Ajoutez 'async' ici
+    await fetchBlockedUsers(); // Charger la liste des utilisateurs bloqués au démarrage
 
-            // Attacher l'écouteur d'événements pour la touche 'Entrée'
-            document.addEventListener('keydown', function(event) {
-                if (event.key === 'Enter') {
-                    const activeElement = document.activeElement;
-                    if (activeElement && activeElement.id.startsWith('messageInput-')) {
-                        const groupName = activeElement.id.split('-')[1];
-                        sendMessage(groupName);
-                        event.preventDefault();
-                    }
-                }
-            });
-        });
+    // Créer la bulle de chat générale au chargement de la page
+    createChatBubble('general', false);
+
+    // Attacher l'écouteur d'événements pour la touche 'Entrée'
+    document.addEventListener('keydown', function (event) {
+        if (event.key === 'Enter') {
+            const activeElement = document.activeElement;
+            if (activeElement && activeElement.id.startsWith('messageInput-')) {
+                const groupName = activeElement.id.split('-')[1];
+                sendMessage(groupName);
+                event.preventDefault();
+            }
+        }
+    });
+
+    // Écouteur pour fermer le menu d'actions si on clique ailleurs sur la page
+    document.addEventListener('click', (event) => {
+        if (userActionsMenu && !userActionsMenu.contains(event.target)) {
+            closeUserActionsMenu();
+        }
+    });
+});
     </script>
 </body>
 </html>

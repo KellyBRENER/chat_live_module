@@ -181,3 +181,89 @@ async def sse_chat_stream(request, group_name):
     response['Cache-Control'] = 'no-cache'
     response['X-Accel-Buffering'] = 'no' # Essentiel pour SSE
     return response
+
+
+@csrf_exempt # Pour les tests rapides. À retirer et utiliser un middleware CSRF approprié en production.
+@require_POST
+#@login_required # S'assure que l'utilisateur est connecté
+async def block_user(request):
+    # L'utilisateur bloquant est request.user
+    # L'utilisateur à bloquer est 'target_username'
+    # if not request.user.is_authenticated:
+    #     return JsonResponse({'status': 'error', 'message': 'Authentification requise.'}, status=401)
+
+    try:
+        data = json.loads(request.body)
+        target_username = data.get('target_username')
+
+        if not target_username:
+            return JsonResponse({'status': 'error', 'message': 'Nom d\'utilisateur cible requis.'}, status=400)
+
+        # Assurez-vous que l'utilisateur cible existe
+        try:
+            target_user = await sync_to_async(User.objects.get)(username=target_username)
+        except User.DoesNotExist:
+            return JsonResponse({'status': 'error', 'message': 'Utilisateur cible introuvable.'}, status=404)
+
+        if request.user == target_user:
+            return JsonResponse({'status': 'error', 'message': 'Vous ne pouvez pas vous bloquer vous-même.'}, status=400)
+
+        # Ajouter l'utilisateur cible à la liste des utilisateurs bloqués
+        await sync_to_async(request.user.blocked_users.add)(target_user)
+
+        return JsonResponse({'status': 'success', 'message': f'{target_username} a été bloqué avec succès.'})
+
+    except json.JSONDecodeError:
+        return JsonResponse({'status': 'error', 'message': 'Format JSON invalide.'}, status=400)
+    except Exception as e:
+        print(f"Erreur lors du blocage de l'utilisateur: {e}")
+        return JsonResponse({'status': 'error', 'message': f'Erreur interne du serveur: {e}'}, status=500)
+
+
+@csrf_exempt # Pour les tests rapides. À retirer et utiliser un middleware CSRF approprié en production.
+@require_POST
+#@login_required # S'assure que l'utilisateur est connecté
+async def unblock_user(request):
+    # if not request.user.is_authenticated:
+    #     return JsonResponse({'status': 'error', 'message': 'Authentification requise.'}, status=401)
+
+    try:
+        data = json.loads(request.body)
+        target_username = data.get('target_username')
+
+        if not target_username:
+            return JsonResponse({'status': 'error', 'message': 'Nom d\'utilisateur cible requis.'}, status=400)
+
+        try:
+            target_user = await sync_to_async(User.objects.get)(username=target_username)
+        except User.DoesNotExist:
+            return JsonResponse({'status': 'error', 'message': 'Utilisateur cible introuvable.'}, status=404)
+
+        # Retirer l'utilisateur cible de la liste des utilisateurs bloqués
+        await sync_to_async(request.user.blocked_users.remove)(target_user)
+
+        return JsonResponse({'status': 'success', 'message': f'{target_username} a été débloqué avec succès.'})
+
+    except json.JSONDecodeError:
+        return JsonResponse({'status': 'error', 'message': 'Format JSON invalide.'}, status=400)
+    except Exception as e:
+        print(f"Erreur lors du déblocage de l'utilisateur: {e}")
+        return JsonResponse({'status': 'error', 'message': f'Erreur interne du serveur: {e}'}, status=500)
+
+
+@require_GET
+#@login_required # S'assure que l'utilisateur est connecté
+async def get_blocked_users(request):
+    # if not request.user.is_authenticated:
+    #     return JsonResponse({'status': 'error', 'message': 'Authentification requise.'}, status=401)
+
+    try:
+        # Récupérer les noms d'utilisateur des utilisateurs bloqués
+        blocked_usernames = await sync_to_async(list)(
+            request.user.blocked_users.values_list('username', flat=True)
+        )
+        return JsonResponse({'status': 'success', 'blocked_usernames': blocked_usernames})
+
+    except Exception as e:
+        print(f"Erreur lors de la récupération des utilisateurs bloqués: {e}")
+        return JsonResponse({'status': 'error', 'message': f'Erreur interne du serveur: {e}'}, status=500)
